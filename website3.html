@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Galactic Symphony</title>
+    <!-- Use Tailwind CSS for a clean, modern UI -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        /* Custom CSS to make the canvas full screen and remove default margins */
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Inter', sans-serif;
+            color: white;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        .overlay {
+            pointer-events: none; /* Allows mouse events to pass through to the canvas */
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <!-- The canvas where the 3D galaxy will be rendered -->
+    <canvas id="galaxyCanvas"></canvas>
+
+    <!-- Overlay for text and instructions -->
+    <div class="overlay">
+        <div class="bg-black/50 backdrop-blur-sm p-8 md:p-12 rounded-2xl border border-white/10 max-w-xl mx-4">
+            <h1 class="text-4xl md:text-6xl font-extrabold tracking-tight mb-4 text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600">
+                Galactic Symphony
+            </h1>
+            <p class="text-lg md:text-xl text-gray-300 font-light mb-6">
+                Explore a beautifully rendered, interactive spiral galaxy. Use your mouse to look around and immerse yourself in the cosmos.
+            </p>
+            <p class="text-sm text-gray-500">
+                (Click and drag to orbit the galaxy)
+            </p>
+        </div>
+    </div>
+
+    <!-- The three.js library for 3D rendering -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <script type="module">
+        // Import necessary modules from three.js (if using modules)
+        // import * as THREE from 'three';
+
+        // --- Core Scene Setup ---
+        const canvas = document.getElementById('galaxyCanvas');
+        const sizes = {
+            width: window.innerWidth,
+            height: window.innerHeight,
+        };
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, sizes.width / sizes.height, 0.1, 1000);
+        camera.position.z = 200;
+        scene.add(camera);
+
+        const renderer = new THREE.WebGLRenderer({
+            canvas: canvas,
+            antialias: true
+        });
+        renderer.setSize(sizes.width, sizes.height);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setClearColor(0x000000, 1);
+
+        // Handle window resizing
+        window.addEventListener('resize', () => {
+            sizes.width = window.innerWidth;
+            sizes.height = window.innerHeight;
+            camera.aspect = sizes.width / sizes.height;
+            camera.updateProjectionMatrix();
+            renderer.setSize(sizes.width, sizes.height);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        });
+
+        // --- Galaxy Generation Parameters ---
+        const parameters = {
+            count: 250000, // Number of stars/particles
+            size: 0.05,
+            radius: 50,
+            branches: 5,
+            spin: 1,
+            randomness: 0.5,
+            randomnessPower: 3,
+            innerColor: new THREE.Color('#ff6030'), // A warm orange/red
+            outerColor: new THREE.Color('#1b3984'), // A cool blue/purple
+        };
+
+        let geometry = null;
+        let material = null;
+        let points = null;
+
+        /**
+         * Generates the galaxy with the specified parameters.
+         */
+        const generateGalaxy = () => {
+            // Clean up old galaxy to prevent memory leaks
+            if (points !== null) {
+                geometry.dispose();
+                material.dispose();
+                scene.remove(points);
+            }
+
+            // Create particle geometry and data arrays
+            geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(parameters.count * 3);
+            const colors = new Float32Array(parameters.count * 3);
+            const scale = new Float32Array(parameters.count * 1);
+            
+            const colorInside = parameters.innerColor;
+            const colorOutside = parameters.outerColor;
+
+            for (let i = 0; i < parameters.count; i++) {
+                const i3 = i * 3;
+
+                // Position
+                const branchAngle = (i % parameters.branches) / parameters.branches * Math.PI * 2;
+                const radius = Math.random() * parameters.radius;
+
+                // Spin the stars along the branch
+                const spinAngle = radius * parameters.spin;
+
+                // Randomness to make it look like a real galaxy
+                const randomX = Math.pow(Math.random(), parameters.randomnessPower) * (Math.random() < 0.5 ? 1 : -1) * parameters.randomness * radius;
+                const randomY = Math.pow(Math.random(), parameters.randomnessPower) * (Math.random() < 0.5 ? 1 : -1) * parameters.randomness * radius;
+                const randomZ = Math.pow(Math.random(), parameters.randomnessPower) * (Math.random() < 0.5 ? 1 : -1) * parameters.randomness * radius;
+
+                positions[i3 + 0] = Math.cos(branchAngle + spinAngle) * radius + randomX;
+                positions[i3 + 1] = 0 + randomY;
+                positions[i3 + 2] = Math.sin(branchAngle + spinAngle) * radius + randomZ;
+                
+                // Color (lerp between inner and outer color)
+                const mixedColor = colorInside.clone();
+                mixedColor.lerp(colorOutside, radius / parameters.radius);
+
+                colors[i3 + 0] = mixedColor.r;
+                colors[i3 + 1] = mixedColor.g;
+                colors[i3 + 2] = mixedColor.b;
+                
+                // Scale (for size variation)
+                scale[i] = Math.random();
+            }
+
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            geometry.setAttribute('aScale', new THREE.BufferAttribute(scale, 1));
+
+            // Create particle material with custom shader for cool effects
+            material = new THREE.ShaderMaterial({
+                depthWrite: false, // Prevents particles from occluding each other
+                blending: THREE.AdditiveBlending, // Makes colors add up for a glow effect
+                vertexColors: true,
+                uniforms: {
+                    uSize: { value: 30 * renderer.getPixelRatio() },
+                    uTime: { value: 0 },
+                },
+                vertexShader: `
+                    uniform float uSize;
+                    uniform float uTime;
+                    attribute float aScale;
+                    attribute vec3 color;
+
+                    varying vec3 vColor;
+
+                    void main() {
+                        vColor = color;
+                        vec4 modelPosition = modelMatrix * vec4(position, 1.0);
+                        modelPosition.y += sin(uTime + modelPosition.x + modelPosition.z) * 0.1;
+
+                        vec4 viewPosition = viewMatrix * modelPosition;
+                        gl_Position = projectionMatrix * viewPosition;
+                        
+                        // Particle size based on camera distance and random scale
+                        gl_PointSize = uSize * aScale * (1.0 / -viewPosition.z);
+                    }
+                `,
+                fragmentShader: `
+                    varying vec3 vColor;
+
+                    void main() {
+                        // Create a circular shape with a soft edge for each particle
+                        float strength = distance(gl_PointCoord, vec2(0.5));
+                        strength = 1.0 - strength;
+                        strength = pow(strength, 3.0);
+                        
+                        gl_FragColor = vec4(vColor, strength);
+                    }
+                `
+            });
+
+            // Create the points object and add to the scene
+            points = new THREE.Points(geometry, material);
+            scene.add(points);
+        };
+
+        // Generate the initial galaxy
+        generateGalaxy();
+
+        // --- Interaction: Mouse Controls ---
+        let mouseX = 0;
+        let mouseY = 0;
+        let isMouseDown = false;
+
+        document.addEventListener('mousemove', (event) => {
+            if (isMouseDown) {
+                mouseX = event.clientX;
+                mouseY = event.clientY;
+            }
+        });
+
+        document.addEventListener('mousedown', () => {
+            isMouseDown = true;
+            document.body.style.cursor = 'grabbing';
+        });
+
+        document.addEventListener('mouseup', () => {
+            isMouseDown = false;
+            document.body.style.cursor = 'default';
+        });
+
+        // --- Animation Loop ---
+        const clock = new THREE.Clock();
+
+        const animate = () => {
+            const elapsedTime = clock.getElapsedTime();
+
+            // Animate the galaxy's rotation
+            points.rotation.y = elapsedTime * 0.05;
+
+            // Update mouse camera controls
+            if (isMouseDown) {
+                const deltaX = (mouseX / sizes.width - 0.5) * Math.PI * 2;
+                const deltaY = (mouseY / sizes.height - 0.5) * Math.PI * 2;
+
+                camera.position.x = Math.cos(deltaX) * 200;
+                camera.position.z = Math.sin(deltaX) * 200;
+                camera.position.y = -deltaY * 200;
+                camera.lookAt(new THREE.Vector3(0, 0, 0));
+            }
+            
+            // Update the shader uniforms for animation
+            material.uniforms.uTime.value = elapsedTime;
+            
+            // Render the scene
+            renderer.render(scene, camera);
+
+            // Call the next frame
+            window.requestAnimationFrame(animate);
+        };
+        
+        // Start the animation on window load
+        window.onload = function () {
+            animate();
+        };
+
+    </script>
+</body>
+</html>
